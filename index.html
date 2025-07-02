@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CSV Merge Tool</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: auto;
+      padding: 20px;
+    }
+    input, select, button {
+      margin-bottom: 10px;
+      padding: 5px;
+      display: block;
+      width: 100%;
+    }
+    label {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h2>CSV Merge Tool with Prefix and Key Matching</h2>
+
+  <label>Base CSV:</label>
+  <input type="file" id="baseCSV" accept=".csv">
+
+  <label>Prefix for Base CSV:</label>
+  <input type="text" id="basePrefix" placeholder="e.g. p1_">
+
+  <label>Select Base Key Column:</label>
+  <select id="baseKeyColumn"></select>
+
+  <label>Second CSV:</label>
+  <input type="file" id="secondCSV" accept=".csv">
+
+  <label>Prefix for Second CSV:</label>
+  <input type="text" id="secondPrefix" placeholder="e.g. c1_">
+
+  <label>Select Second Key Column:</label>
+  <select id="secondKeyColumn"></select>
+
+  <button onclick="mergeCSV()">Merge and Download</button>
+
+  <script>
+    let baseData = [], baseHeaders = [];
+    let secondData = [], secondHeaders = [];
+
+    document.getElementById('baseCSV').addEventListener('change', async function (e) {
+      const text = await e.target.files[0].text();
+      const rows = parseCSV(text);
+      baseHeaders = rows[0];
+      baseData = rows.slice(1);
+      populateDropdown('baseKeyColumn', baseHeaders);
+    });
+
+    document.getElementById('secondCSV').addEventListener('change', async function (e) {
+      const text = await e.target.files[0].text();
+      const rows = parseCSV(text);
+      secondHeaders = rows[0];
+      secondData = rows.slice(1);
+      populateDropdown('secondKeyColumn', secondHeaders);
+    });
+
+    function populateDropdown(id, headers) {
+      const select = document.getElementById(id);
+      select.innerHTML = '';
+      headers.forEach(h => {
+        const opt = document.createElement('option');
+        opt.value = h;
+        opt.innerText = h;
+        select.appendChild(opt);
+      });
+    }
+
+    function parseCSV(text) {
+      const rows = text.trim().split('\n').map(line =>
+        line.split(',').map(col => col.trim())
+      );
+      return rows;
+    }
+
+    function mergeCSV() {
+      const basePrefix = document.getElementById('basePrefix').value || '';
+      const secondPrefix = document.getElementById('secondPrefix').value || '';
+      const baseKey = document.getElementById('baseKeyColumn').value;
+      const secondKey = document.getElementById('secondKeyColumn').value;
+
+      const baseKeyIndex = baseHeaders.indexOf(baseKey);
+      const secondKeyIndex = secondHeaders.indexOf(secondKey);
+
+      // Build lookup from second CSV
+      const secondMap = {};
+      secondData.forEach(row => {
+        const key = row[secondKeyIndex];
+        secondMap[key] = row;
+      });
+
+      // Prepare merged headers
+      const prefixedBaseHeaders = baseHeaders.map(h => basePrefix + h);
+      const prefixedSecondHeaders = secondHeaders.map(h => secondPrefix + h);
+      const mergedHeaders = [...prefixedBaseHeaders, ...prefixedSecondHeaders];
+
+      const mergedRows = [mergedHeaders];
+
+      baseData.forEach(row => {
+        const baseKeyValue = row[baseKeyIndex];
+        const matchedRow = secondMap[baseKeyValue];
+        const newRow = [...row];
+
+        if (matchedRow) {
+          newRow.push(...matchedRow);
+        } else {
+          newRow.push(...new Array(secondHeaders.length).fill(''));
+        }
+
+        mergedRows.push(newRow);
+      });
+
+      const csvContent = mergedRows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+      downloadCSV(csvContent, 'merged_output.csv');
+    }
+
+    function downloadCSV(content, filename) {
+      const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.setAttribute("download", filename);
+      link.click();
+    }
+  </script>
+</body>
+</html>
